@@ -1,5 +1,5 @@
 name: Knowledge Hub
-version: "0.5.0"
+version: "1.0.0"
 slug: knowledge_hub
 description: "Testversion für synthetische Markdown-Dateien"
 url: https://github.com/enricohoeffler/knowledge-hub
@@ -20,8 +20,6 @@ options:
   smb_username: ""
   smb_password: ""
   smb_subdirectory: ""
-  allowed_files:
-    - index.md
   excluded_paths: []
 schema:
   synthetic_ha_test: bool
@@ -31,7 +29,5 @@ schema:
   smb_username: str
   smb_password: password
   smb_subdirectory: str
-  allowed_files:
-    - str
   excluded_paths:
     - str

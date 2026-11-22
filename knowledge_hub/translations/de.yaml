@@ -20,9 +20,6 @@ configuration:
   smb_subdirectory:
     name: Unterordner
     description: Relativer Pfad unter der Freigabe; leer für deren Wurzel.
-  allowed_files:
-    name: Frühere Positivliste (nicht mehr verwendet)
-    description: Die Sichtbarkeit wird über die Ausschlussliste im Knowledge Hub verwaltet.
   excluded_paths:
     name: Ausgeschlossene Dateien und Ordner
     description: Entferne hier einen Eintrag und starte die App neu, um ihn wieder anzuzeigen. Ordner schließen ihren gesamten Inhalt ein.

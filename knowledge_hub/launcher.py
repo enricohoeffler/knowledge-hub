@@ -27,7 +27,6 @@ if options_path.is_file():
         username = options.get('smb_username', '')
         password = options.get('smb_password', '')
         subdir = options.get('smb_subdirectory', '')
-        files = options.get('allowed_files', [])
         if not isinstance(server, str) or not re.fullmatch(r'[A-Za-z0-9.-]+', server):
             raise SystemExit('Invalid SMB server')
         if not isinstance(share, str) or not re.fullmatch(r'[A-Za-z0-9_. -]+', share) or share.startswith('.'):
@@ -36,11 +35,9 @@ if options_path.is_file():
             raise SystemExit('SMB credentials are required')
         if not isinstance(subdir, str) or (subdir and any(not re.fullmatch(r'[^\\/:*?"<>|\x00-\x1f]+', p) or p.startswith('.') or p.endswith((' ', '.')) for p in subdir.split('/'))):
             raise SystemExit('Invalid test subdirectory')
-        if not isinstance(files, list) or not all(isinstance(p, str) for p in files):
-            raise SystemExit('Invalid legacy file list')
         base = Path(tempfile.mkdtemp(prefix='knowledge-hub-policy-'))
         policy = base / 'policy.json'
-        policy.write_text(json.dumps({'files': files}), encoding='utf-8')
+        policy.write_text(json.dumps({'files': []}), encoding='utf-8')
         os.environ.update(KH_SYNTHETIC_ONLY='yes', KH_INGRESS_ONLY='yes',
                           KH_POLICY=str(policy), HOST='0.0.0.0', KH_SMB_OPTIONS=str(options_path),
                           KH_EXCLUSIONS_FILE='/data/excluded-files.json')

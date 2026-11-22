@@ -10,7 +10,6 @@ Für den SMB-Test ein dediziertes Benutzerkonto verwenden, das auf dem Server au
 - `smb_share`: Name der SMB-Freigabe.
 - `smb_username` und `smb_password`: Zugangsdaten des eingeschränkten SMB-Kontos.
 - `smb_subdirectory`: optionaler relativer Unterordner auf der Freigabe.
-- `allowed_files`: alte Einstellung; sie wird im SMB-Testmodus nicht mehr zur Auswahl verwendet.
 
 Im SMB-Testmodus sind Markdown-Dateien sowie PNG-, JPEG-, GIF- und WebP-Bilder im ausgewählten Unterordner und seinen Unterordnern standardmäßig sichtbar. Neue unterstützte Dateien werden automatisch aufgenommen. Andere Dateitypen und versteckte Dateien werden nicht veröffentlicht. Über **− Datei** oder **− Ordner** neben „Bearbeiten“ lassen sich die aktuelle Datei oder ihr Ordner einschließlich aller Unterordner ausblenden. Das Wiederanzeigen erfolgt ausschließlich in **Home Assistant → Einstellungen → Apps → Knowledge Hub → Konfiguration**: Den Eintrag unter **Ausgeschlossene Dateien und Ordner** entfernen, speichern und die App neu starten. `index.md` ist als Startseite erforderlich und kann nicht ausgeschlossen werden. Die Liste bleibt nach einem Neustart erhalten.
 
