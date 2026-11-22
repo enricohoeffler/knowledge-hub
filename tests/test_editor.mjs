@@ -43,7 +43,7 @@ const doc = {
     return copies[node.id];
   },
   createElement(){return {value:'', textContent:'', dataset:{}, setAttribute(){},replaceWith(next){elements.editor=next;}}},
-  querySelector(){return {append(){}}}
+  querySelector(selector){return selector==='.md-search__input'?null:{append(){}}}
 };
 const frame = {contentDocument:doc,contentWindow:{location:{href:'http://test/site/index.html'}},src:''};
 const document={documentElement:{dataset:{}},querySelector(s){return s==='iframe'?frame:elements[s.slice(1)]},createElement(){return {value:'',textContent:''}}};

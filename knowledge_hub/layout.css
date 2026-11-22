@@ -68,3 +68,31 @@ body { background: var(--kh-page); color: var(--kh-text); font-family: Roboto, "
 @media screen and (max-width: 59.99em) {
   .md-content__inner { margin: .6rem; padding: 1rem; }
 }
+/* Borderless cards; leave the folder hierarchy visible without separator lines. */
+.md-sidebar--primary { border: 0; border-radius: 12px; overflow: hidden; }
+.md-sidebar--primary .md-nav__list .md-nav__list { border-left: 0; }
+.md-nav--primary > .md-nav__title { display: none; }
+.md-content__inner { border: 0; box-shadow: none; }
+
+/* Keep a real search input in the compact header. Focusing it opens the
+   standard Material search panel, including its keyboard and close behavior. */
+@media screen and (max-width: 59.984375em) {
+  .md-header__title, .md-header__button[for="__search"] { display: none; }
+  .md-search { flex: 1; width: auto; height: 2.4rem; margin-right: .6rem; }
+  .md-search__inner { position: static; width: 100%; height: 2.4rem; overflow: visible; opacity: 1; transform: none; transition: none; }
+  .md-search__form { border-radius: .4rem; background: #0002; }
+  .md-search__input { color: var(--md-primary-bg-color); }
+  .md-search__input::placeholder, .md-search__input ~ .md-search__icon { color: var(--md-primary-bg-color); opacity: .8; }
+  .md-search__output, .md-search__overlay { display: none; }
+  [data-md-toggle="search"]:checked ~ .md-header .md-search__inner { position: fixed; inset: 0; width: 100%; height: 100%; overflow: hidden; }
+  [data-md-toggle="search"]:checked ~ .md-header .md-search__output,
+  [data-md-toggle="search"]:checked ~ .md-header .md-search__overlay { display: block; }
+  [data-md-toggle="search"]:checked ~ .md-header .md-search__input { color: var(--md-default-fg-color); }
+  [data-md-toggle="search"]:checked ~ .md-header .md-search__input::placeholder,
+  [data-md-toggle="search"]:checked ~ .md-header .md-search__input ~ .md-search__icon { color: var(--md-default-fg-color--light); }
+}
+.kh-home-link { display: none !important; }
+@media screen and (max-width: 59.984375em) {
+  [data-md-toggle="search"]:not(:checked) ~ .md-header .md-search__icon svg:first-child { display: block; }
+  [data-md-toggle="search"]:not(:checked) ~ .md-header .md-search__icon svg:last-child { display: none; }
+}
