@@ -172,6 +172,13 @@ class Prototype(unittest.TestCase):
         self.assertIn(b'README.html', generated['index.html'])
         self.assertIn(b'README.html', generated['search/search_index.json'])
 
+    def test_missing_home_page_has_generated_landing(self):
+        generated = hub.build({'andere.md': b'# Testseite\n'})
+        self.assertIn('index.html', generated)
+        self.assertIn('andere.html', generated)
+        self.assertIn('Navigation'.encode(), generated['index.html'])
+        self.assertNotIn(b'Knowledge Hub\n\nW', generated['andere.html'])
+
     def test_11_supervisor_sync_preserves_other_options(self):
         calls = []
         def fake_open(request, timeout):

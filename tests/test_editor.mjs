@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 
 const source = readFileSync('knowledge_hub/app.py', 'utf8');
 const script = source.split('<script>')[1].split('</script>')[0].replaceAll('\\\\', '\\');
-const elements = Object.fromEntries(['page','editor','msg','theme','dock','header-actions','editpanel','open','edit-title','time','save','restore','close','exclude-file','exclude-folder'].map(id => [id, {
+const elements = Object.fromEntries(['page','editor','msg','theme','dock','header-actions','editpanel','open','edit-title','time','save','restore','close','exclude-file','exclude-folder','loading'].map(id => [id, {
   id, value:'', textContent:'', hidden:id==='editpanel', disabled:false, dataset:{}, options:[],
   setAttribute(){}, replaceWith(next){ elements.editor=next; }, append(child){this.options.push(child);}
 }]));
@@ -52,6 +52,8 @@ const haTheme={selectedTheme:{dark:true},themes:{darkMode:false}};
 const window={parent:{document:{querySelector:()=>({hass:haTheme})}},matchMedia:()=>({matches:false})};
 const context={document,window,location:{href:'http://test/'},URL,Array,decodeURIComponent,localStorage:{getItem(){return null},setItem(){}},fetch:mockFetch,confirm:()=>{confirmations++;return acceptNavigation}};
 runInNewContext(script,context);
+const realNavigate=context.navigateTo;
+context.navigateTo=(target)=>{frame.src=target};
 assert.equal(document.documentElement.dataset.theme,'dark','explicit Home Assistant dark mode is used');
 haTheme.selectedTheme.dark=false;context.applyTheme();
 assert.equal(document.documentElement.dataset.theme,'light','Home Assistant light mode is used');
@@ -130,4 +132,24 @@ assert.equal(JSON.parse(exclusion.opts.body).path,'rezepte','folder action targe
 await nav('index.md');
 assert.equal(elements['exclude-file'].hidden,true,'home page cannot be excluded');
 assert.equal(elements['exclude-folder'].hidden,true,'home page has no parent-folder action');
-console.log('PASS: save and navigate, unsaved drafts, wrong-page guard, delayed load and save');
+// Exercise the real preloading path with a delayed response and a failed request.
+let releaseNavigation;const slow=new Promise(r=>{releaseNavigation=r});
+const workspace={children:[],append(child){this.children.push(child)}};
+const originalQuery=document.querySelector;document.querySelector=s=>s==='.workspace'?workspace:originalQuery.call(document,s);
+const originalCreate=document.createElement;document.createElement=tag=>tag==='iframe'?{setAttribute(){},remove(){this.removed=true},contentDocument:{...doc,__khGuard:false},contentWindow:{location:{href:'http://test/site/andere.html'}}}:originalCreate(tag);
+frame.remove=()=>{frame.removed=true};
+context.fetch=async url=>{if(url==='slow.html'){await slow;return {ok:true}}if(url==='missing.html')return {ok:false};return mockFetch(url)};
+context.navigateTo=realNavigate;
+const navigation=context.navigateTo('slow.html');
+assert.equal(elements.loading.hidden,false,'spinner is visible while loading');
+assert.equal(frame.removed,undefined,'old page stays visible during the request');
+releaseNavigation();await navigation;
+assert.equal(workspace.children.length,1,'new page is staged offscreen');
+assert.equal(frame.removed,undefined,'old page stays until the new frame loads');
+workspace.children[0].onload();
+assert.equal(frame.removed,true,'old page is removed after the new page loads');
+assert.equal(elements.loading.hidden,true,'spinner is hidden after the swap');
+await context.navigateTo('missing.html');
+assert.equal(elements.loading.hidden,true,'failed navigation ends the loading state');
+assert.match(elements.msg.textContent,/nicht geladen/,'failed navigation is reported');
+console.log('PASS: editor, draft protection, navigation preload and failure handling');
