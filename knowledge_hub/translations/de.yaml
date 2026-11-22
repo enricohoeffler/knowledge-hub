@@ -2,3 +2,24 @@ configuration:
   synthetic_ha_test:
     name: Synthetischen HA-Test aktivieren
     description: Startet ausschließlich mit flüchtigen Beispieldaten und erlaubt nur Verbindungen vom Supervisor-Ingress-Proxy. Nicht für echte Daten.
+  smb_test_enabled:
+    name: SMB-Testquelle aktivieren
+    description: Nur für eine separate Freigabe mit verzichtbaren Beispieldateien. Nicht gemeinsam mit dem flüchtigen Testmodus aktivieren.
+  smb_server:
+    name: SMB-Server
+    description: Servername oder IP-Adresse der Testfreigabe.
+  smb_share:
+    name: SMB-Freigabe
+    description: Name der Freigabe auf dem SMB-Server.
+  smb_username:
+    name: SMB-Benutzername
+    description: Dediziertes Benutzerkonto mit Zugriff nur auf die Testfreigabe.
+  smb_password:
+    name: SMB-Passwort
+    description: Passwort des SMB-Benutzerkontos; geschützt in den Home-Assistant-App-Optionen eingeben.
+  smb_subdirectory:
+    name: Unterordner
+    description: Relativer Pfad unter der Freigabe; leer für deren Wurzel.
+  allowed_files:
+    name: Freigegebene Testdateien
+    description: Explizite relative Dateipfade einschließlich index.md. Andere Dateien sind nicht für den Editor freigegeben.

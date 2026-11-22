@@ -12,12 +12,15 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, quote, unquote, urlsplit
+from smb_storage import SMBStorage, Conflict
 
 ROOT = Path(os.environ.get('KH_ROOT', '/fixtures')).resolve()
 POLICY = Path(os.environ.get('KH_POLICY', '/policy.json'))
 PORT = int(os.environ.get('PORT', '8099'))
 HOST = os.environ.get('HOST', '127.0.0.1')
 INGRESS_ONLY = os.environ.get('KH_INGRESS_ONLY') == 'yes'
+SMB_OPTIONS = os.environ.get('KH_SMB_OPTIONS')
+SMB = SMBStorage(json.loads(Path(SMB_OPTIONS).read_text(encoding='utf-8'))) if SMB_OPTIONS else None
 if os.environ.get('KH_SYNTHETIC_ONLY') != 'yes':
     raise SystemExit('Prototype disabled: set KH_SYNTHETIC_ONLY=yes for synthetic fixtures only')
 allowed = json.loads(POLICY.read_text(encoding='utf-8'))['files']
@@ -55,6 +58,10 @@ def file_path(name):
     return current
 
 def read(name):
+    if SMB:
+        if not valid_path(name) or name not in allowed:
+            raise FileNotFoundError('not available')
+        return SMB.read(name)
     return file_path(name).read_bytes()
 
 def digest(b):
@@ -179,15 +186,21 @@ class Handler(BaseHTTPRequestHandler):
                 old = read(name)
                 if digest(old) != revision:
                     return self.obj(409, {'error': 'Die Datei wurde zwischenzeitlich geändert. Ihr Entwurf bleibt im Editor. Kopieren Sie ihn vor dem erneuten Laden und vergleichen Sie beide Fassungen.'})
-                target = file_path(name)
                 # Prototype only: another SMB writer can race this check and the replace.
                 backups[name] = old
-                tmp = target.parent / ('.kh-' + os.urandom(12).hex())
-                try:
-                    tmp.write_bytes(content.encode('utf-8'))
-                    os.replace(tmp, target)
-                finally:
-                    tmp.unlink(missing_ok=True)
+                if SMB:
+                    try:
+                        SMB.write(name, content.encode('utf-8'), revision, digest)
+                    except Conflict:
+                        return self.obj(409, {'error': 'Die Datei wurde zwischenzeitlich geändert. Ihr Entwurf bleibt im Editor.'})
+                else:
+                    target = file_path(name)
+                    tmp = target.parent / ('.kh-' + os.urandom(12).hex())
+                    try:
+                        tmp.write_bytes(content.encode('utf-8'))
+                        os.replace(tmp, target)
+                    finally:
+                        tmp.unlink(missing_ok=True)
                 try:
                     refresh()
                     return self.obj(200, {'message': 'Gespeichert und Ansicht aktualisiert.', 'revision': digest(content.encode('utf-8'))})

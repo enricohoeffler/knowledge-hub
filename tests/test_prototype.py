@@ -145,6 +145,21 @@ class Prototype(unittest.TestCase):
         finally:
             hub.INGRESS_ONLY = previous
 
+    def test_09_unavailable_smb_blocks_read_and_save(self):
+        original = (ROOT / 'index.md').read_bytes()
+        revision = json.loads(req('/api/file?path=index.md')[1])['revision']
+        old_smb = hub.SMB
+        class Unavailable:
+            def read(self, name):
+                raise OSError('synthetic disconnect')
+        try:
+            hub.SMB = Unavailable()
+            self.assertEqual(req('/api/file?path=index.md')[0], 404)
+            self.assertEqual(req('/api/save', {'path': 'index.md', 'revision': revision, 'content': 'not saved'})[0], 400)
+            self.assertEqual((ROOT / 'index.md').read_bytes(), original)
+        finally:
+            hub.SMB = old_smb
+
 if __name__ == '__main__':
     try: unittest.main(verbosity=2)
     finally: server.shutdown(); TEMP.cleanup()

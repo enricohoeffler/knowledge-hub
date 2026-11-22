@@ -1,7 +1,7 @@
 name: Knowledge Hub
-version: "0.1.0"
+version: "0.2.0"
 slug: knowledge_hub
-description: "Synthetischer Prototyp; noch nicht produktionsbereit"
+description: "Testversion für synthetische Markdown-Dateien"
 url: https://github.com/enricohoeffler/knowledge-hub
 arch:
   - amd64
@@ -14,5 +14,21 @@ startup: application
 init: false
 options:
   synthetic_ha_test: false
+  smb_test_enabled: false
+  smb_server: ""
+  smb_share: ""
+  smb_username: ""
+  smb_password: ""
+  smb_subdirectory: ""
+  allowed_files:
+    - index.md
 schema:
   synthetic_ha_test: bool
+  smb_test_enabled: bool
+  smb_server: str
+  smb_share: str
+  smb_username: str
+  smb_password: password
+  smb_subdirectory: str
+  allowed_files:
+    - str

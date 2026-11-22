@@ -7,7 +7,7 @@ LABEL io.hass.version="${BUILD_VERSION}" \
 WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
-COPY app.py launcher.py mkdocs-template.yml layout.css ./
+COPY app.py launcher.py smb_storage.py mkdocs-template.yml layout.css ./
 COPY fixtures ./fixtures
 ENV PYTHONUNBUFFERED=1
 CMD ["python", "launcher.py"]
