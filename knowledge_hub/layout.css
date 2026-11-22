@@ -1,0 +1,22 @@
+/* Keep the Material navigation visible while the reading frame scrolls. */
+.md-header { position: sticky; top: 0; z-index: 4; }
+@media screen and (min-width: 60em) {
+  .md-sidebar--primary { position: sticky; top: 2.4rem; align-self: flex-start; height: calc(100vh - 2.4rem); max-height: none; }
+  .md-sidebar--primary .md-sidebar__scrollwrap { height: 100%; max-height: none; overflow-y: auto; }
+}
+
+/* The editor is part of the article, leaving the navigation its full height. */
+.kh-header-actions { display: flex; align-items: center; margin-left: .5rem; }
+.kh-theme { color: inherit; background: transparent; border: 1px solid currentColor; border-radius: .35rem; padding: .3rem .55rem; font: inherit; font-size: .65rem; cursor: pointer; white-space: nowrap; }
+.kh-editor { margin: 2rem 0; padding-top: 1.2rem; border-top: 1px solid var(--md-default-fg-color--lightest); color: var(--md-default-fg-color); }
+.kh-editor button { font: inherit; font-size: .7rem; cursor: pointer; border: 1px solid var(--md-default-fg-color--lightest); border-radius: .35rem; padding: .45rem .7rem; color: var(--md-default-fg-color); background: var(--md-default-bg-color); }
+.kh-editor .primary { background: #087f70; color: white; border-color: #087f70; }
+.kh-editor button:hover { opacity: .85; }
+.kh-editor button:focus-visible, .kh-editor textarea:focus-visible, .kh-theme:focus-visible { outline: 3px solid #7dd5bb; outline-offset: 2px; }
+.kh-editor [hidden] { display: none !important; }
+.kh-editor textarea { box-sizing: border-box; display: block; width: 100%; min-height: 14rem; margin-top: .6rem; padding: .7rem; resize: vertical; border: 1px solid var(--md-default-fg-color--lightest); border-radius: .35rem; background: var(--md-default-bg-color); color: var(--md-default-fg-color); font: .65rem/1.6 ui-monospace, Consolas, monospace; }
+.kh-editor-title { display: block; margin-top: .7rem; font-size: .7rem; }
+.kh-editor-actions { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .5rem; }
+.kh-status { white-space: pre-wrap; font-size: .65rem; }
+.kh-status:empty { display: none; }
+.kh-updated { margin-top: .6rem; color: var(--md-default-fg-color--light); font-size: .6rem; }

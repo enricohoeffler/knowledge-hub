@@ -1,0 +1,4 @@
+configuration:
+  synthetic_ha_test:
+    name: Synthetischen HA-Test aktivieren
+    description: Startet ausschließlich mit flüchtigen Beispieldaten und erlaubt nur Verbindungen vom Supervisor-Ingress-Proxy. Nicht für echte Daten.

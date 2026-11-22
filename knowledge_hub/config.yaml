@@ -1,0 +1,18 @@
+name: Knowledge Hub
+version: "0.1.0"
+slug: knowledge_hub
+description: "Synthetischer Prototyp; noch nicht produktionsbereit"
+url: https://github.com/enricohoeffler/knowledge-hub
+arch:
+  - amd64
+  - aarch64
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:book-open-variant
+panel_title: Knowledge Hub
+startup: application
+init: false
+options:
+  synthetic_ha_test: false
+schema:
+  synthetic_ha_test: bool

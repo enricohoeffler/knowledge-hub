@@ -1,0 +1,26 @@
+# Adapted from Xavier Berger's MkDocs add-on (MIT); see UPSTREAM-LICENSE.md.
+site_name: Knowledge Hub
+use_directory_urls: false
+theme:
+  name: material
+  font: false
+  palette:
+    primary: teal
+extra_css:
+  - kh-internal/layout.css
+plugins:
+  - search
+markdown_extensions:
+  - tables
+  - admonition
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.keys
+  - pymdownx.superfences
+  - pymdownx.tabbed
+  - pymdownx.tasklist
+  - pymdownx.tilde
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: '#'
