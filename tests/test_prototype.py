@@ -160,6 +160,16 @@ class Prototype(unittest.TestCase):
         finally:
             hub.SMB = old_smb
 
+    def test_10_readme_and_index_can_coexist(self):
+        generated = hub.build({'index.md': b'# Home\n', 'README.md': b'# Root readme\n',
+                               'wiki/index.md': b'# Wiki\n', 'wiki/README.md': b'# Wiki readme\n'})
+        self.assertIn('index.html', generated)
+        self.assertIn('README.html', generated)
+        self.assertIn('wiki/index.html', generated)
+        self.assertIn('wiki/README.html', generated)
+        self.assertIn(b'README.html', generated['index.html'])
+        self.assertIn(b'README.html', generated['search/search_index.json'])
+
 if __name__ == '__main__':
     try: unittest.main(verbosity=2)
     finally: server.shutdown(); TEMP.cleanup()

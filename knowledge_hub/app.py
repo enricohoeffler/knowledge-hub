@@ -105,8 +105,18 @@ def build(data):
         base = Path(temp)
         docs = base / 'docs'
         docs.mkdir()
+        # MkDocs silently discards README.md when an index.md exists in the
+        # same directory. Give READMEs a temporary, unambiguous source name.
+        readmes = {name for name in data if PurePosixPath(name).name.casefold() == 'readme.md'}
+        staged_names = {}
+        for name in readmes:
+            staged = 'kh-readme-' + hashlib.sha256(name.encode()).hexdigest()[:16] + '.md'
+            while str(PurePosixPath(name).with_name(staged)) in data:
+                staged = 'kh-' + staged
+            staged_names[name] = staged
         for name, contents in data.items():
-            target = docs.joinpath(*name.split('/'))
+            staged = str(PurePosixPath(name).with_name(staged_names[name])) if name in readmes else name
+            target = docs.joinpath(*staged.split('/'))
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(contents)
         internal = docs / 'kh-internal'
@@ -118,6 +128,19 @@ def build(data):
                        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=60)
         output = base / 'site'
         files = {p.relative_to(output).as_posix(): p.read_bytes() for p in output.rglob('*') if p.is_file() and not p.is_symlink()}
+        for name in readmes:
+            staged_html = staged_names[name][:-3] + '.html'
+            staged_path = str(PurePosixPath(name).with_name(staged_html))
+            output_path = name[:-3] + '.html'
+            if staged_path not in files or output_path in files:
+                raise ValueError('Build incomplete')
+            files[output_path] = files.pop(staged_path)
+        # Navigation and the search index refer to the temporary file name.
+        for path, contents in files.items():
+            if path.endswith(('.html', '.json')):
+                for name in readmes:
+                    contents = contents.replace((staged_names[name][:-3] + '.html').encode(), (PurePosixPath(name).name[:-3] + '.html').encode())
+                files[path] = contents
         if 'index.html' not in files or 'search/search_index.json' not in files:
             raise ValueError('Build incomplete')
         for name in data:
