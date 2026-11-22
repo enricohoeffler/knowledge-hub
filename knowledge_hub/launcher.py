@@ -36,11 +36,12 @@ if options_path.is_file():
             raise SystemExit('SMB credentials are required')
         if not isinstance(subdir, str) or (subdir and any(not re.fullmatch(r'[^\\/:*?"<>|\x00-\x1f]+', p) or p.startswith('.') or p.endswith((' ', '.')) for p in subdir.split('/'))):
             raise SystemExit('Invalid test subdirectory')
-        if not isinstance(files, list) or not files or not all(isinstance(p, str) for p in files):
-            raise SystemExit('Configure an explicit test file allowlist')
+        if not isinstance(files, list) or not all(isinstance(p, str) for p in files):
+            raise SystemExit('Invalid legacy file list')
         base = Path(tempfile.mkdtemp(prefix='knowledge-hub-policy-'))
         policy = base / 'policy.json'
         policy.write_text(json.dumps({'files': files}), encoding='utf-8')
         os.environ.update(KH_SYNTHETIC_ONLY='yes', KH_INGRESS_ONLY='yes',
-                          KH_POLICY=str(policy), HOST='0.0.0.0', KH_SMB_OPTIONS=str(options_path))
+                          KH_POLICY=str(policy), HOST='0.0.0.0', KH_SMB_OPTIONS=str(options_path),
+                          KH_EXCLUSIONS_FILE='/data/excluded-files.json')
 os.execv(sys.executable, [sys.executable, '/app/app.py'])

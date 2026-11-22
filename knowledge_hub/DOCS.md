@@ -10,11 +10,13 @@ Für den SMB-Test ein dediziertes Benutzerkonto verwenden, das auf dem Server au
 - `smb_share`: Name der SMB-Freigabe.
 - `smb_username` und `smb_password`: Zugangsdaten des eingeschränkten SMB-Kontos.
 - `smb_subdirectory`: optionaler relativer Unterordner auf der Freigabe.
-- `allowed_files`: explizite relative Pfade der freigegebenen Beispieldateien, einschließlich `index.md`.
+- `allowed_files`: alte Einstellung; sie wird im SMB-Testmodus nicht mehr zur Auswahl verwendet.
+
+Im SMB-Testmodus sind Markdown-Dateien sowie PNG-, JPEG-, GIF- und WebP-Bilder im ausgewählten Unterordner und seinen Unterordnern standardmäßig sichtbar. Neue unterstützte Dateien werden automatisch aufgenommen. Andere Dateitypen und versteckte Dateien werden nicht veröffentlicht. Über **Ausgeschlossene Dateien verwalten** in der App können einzelne Dateien ausgeschlossen und später wieder angezeigt werden. `index.md` ist als Startseite erforderlich und kann nicht ausgeschlossen werden. Die Ausschlussliste bleibt in den privaten App-Daten auch nach einem Neustart erhalten.
 
 Das Passwort wird in den App-Optionen eingegeben und von Home Assistant als `/data/options.json` an die App übergeben; es steht nicht im Repository. Alternativ kann ein Home-Assistant-Secret referenziert werden. App-Daten und Backups entsprechend schützen. Bei Passwortwechsel das neue Passwort zuerst auf dem Server setzen und dann in den App-Optionen ändern; nach erfolgreichem Verbindungstest das alte Passwort widerrufen.
 
-Die App verwendet nur die konfigurierte Server-/Freigabekombination und eine Dateipositivliste. Die tatsächliche Begrenzung der SMB-Rechte erfolgt serverseitig über das gewählte Benutzerkonto; Unterordner und Positivliste sind keine Ersatzberechtigung. DFS ist deaktiviert und SMB-Reparse-Punkte werden abgelehnt; Pfadprüfungen können bei gleichzeitigen Änderungen durch andere Clients überholt werden.
+Die App verwendet nur die konfigurierte Server-/Freigabekombination und die Ausschlussliste. Neue Dateien werden automatisch sichtbar; verwende diesen Modus ausschließlich für den ausdrücklich freigegebenen Testordner. Die tatsächliche Begrenzung der SMB-Rechte erfolgt serverseitig über das gewählte Benutzerkonto; Unterordner und Ausschlussliste sind keine Ersatzberechtigung. Inhalte ausgeschlossener Dateien können weiterhin in anderen Seiten oder Bildern vorkommen. DFS ist deaktiviert und SMB-Reparse-Punkte werden abgelehnt; Pfadprüfungen können bei gleichzeitigen Änderungen durch andere Clients überholt werden.
 
 Der Editor erkennt Änderungen anhand einer Revision vor dem Speichern. Andere SMB-Clients können zwischen Prüfung und Ersetzen schreiben; dabei kann es zu Datenverlust kommen. Nur eine Person beziehungsweise ein Programm darf gleichzeitig an den Testdateien arbeiten. Sicherungen im Editor liegen nur im Arbeitsspeicher und gehen beim Neustart verloren. Vor dem Test separate Kopien sichern.
 

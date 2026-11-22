@@ -44,6 +44,26 @@ if not all(valid_path(p) for p in allowed):
 if any(p == 'kh-internal' or p.startswith('kh-internal/') for p in allowed):
     raise SystemExit('Reserved internal path')
 allowed = frozenset(allowed)
+EXCLUSIONS_FILE = Path(os.environ.get('KH_EXCLUSIONS_FILE', '/data/excluded-files.json'))
+excluded = set()
+if SMB and EXCLUSIONS_FILE.exists():
+    excluded_data = json.loads(EXCLUSIONS_FILE.read_text(encoding='utf-8'))
+    if not isinstance(excluded_data, list) or not all(valid_path(p) and p.casefold() != 'index.md' for p in excluded_data):
+        raise SystemExit('Invalid exclusion list')
+    excluded = set(excluded_data)
+
+def is_excluded(name):
+    key = name.casefold()
+    return any(key == item.casefold() or key.startswith(item.casefold() + '/') for item in excluded)
+
+def persist_exclusions(items):
+    EXCLUSIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = EXCLUSIONS_FILE.with_name(EXCLUSIONS_FILE.name + '.tmp')
+    try:
+        tmp.write_text(json.dumps(sorted(items), ensure_ascii=False), encoding='utf-8')
+        os.replace(tmp, EXCLUSIONS_FILE)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 def file_path(name):
     if not valid_path(name) or name not in allowed:
@@ -68,6 +88,15 @@ def digest(b):
     return hashlib.sha256(b).hexdigest()
 
 def collect():
+    global allowed
+    if SMB:
+        extensions = {'.md', '.png', '.jpg', '.jpeg', '.gif', '.webp'}
+        discovered = SMB.list_files()
+        selected = [p for p in discovered if valid_path(p) and not p.startswith('kh-internal/')
+                    and Path(p).suffix.lower() in extensions and not is_excluded(p)]
+        if len({p.casefold() for p in selected}) != len(selected):
+            raise OSError('Ambiguous SMB filenames')
+        allowed = frozenset(selected)
     return {name: read(name) for name in sorted(allowed)}
 
 def build(data):
@@ -99,6 +128,7 @@ def build(data):
 def refresh():
     global site, built_at, snapshot, source_ok
     with lock:
+        previous_allowed = allowed
         try:
             data = collect()
         except OSError:
@@ -108,6 +138,8 @@ def refresh():
         if state == snapshot:
             source_ok = True
             return False
+        if SMB and not previous_allowed.issubset(allowed):
+            source_ok = False
         candidate = build(data)
         # Discard a build made from a source that changed during generation.
         try:
@@ -152,6 +184,11 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond(200, UI, 'text/html; charset=utf-8')
         if path.path == '/api/pages':
             return self.obj(200, {'pages': sorted(p for p in allowed if p.endswith('.md')), 'built_at': built_at, 'source_ok': source_ok})
+        if path.path == '/api/exclusions' and SMB:
+            with lock:
+                items = sorted(excluded, key=str.casefold)
+                available = sorted(allowed, key=str.casefold)
+            return self.obj(200, {'excluded': items, 'available': available})
         if path.path == '/api/backup':
             name = parse_qs(path.query).get('path', [''])[0]
             with lock: data = backups.get(name) if name in allowed else None
@@ -166,15 +203,46 @@ class Handler(BaseHTTPRequestHandler):
             except (OSError, UnicodeError):
                 return self.obj(404, {'error': 'Seite nicht verfügbar.'})
         if path.path.startswith('/site/'):
-            if not source_ok: return self.respond(503, 'Quelle nicht verfügbar.')
             name = unquote(path.path[len('/site/'):]) or 'index.html'
             if not valid_path(name): return self.respond(404, 'Seite nicht verfügbar.')
-            with lock: data = site.get(name)
+            with lock:
+                if not source_ok: return self.respond(503, 'Quelle nicht verfügbar.')
+                data = site.get(name)
             if data is None: return self.respond(404, 'Seite nicht verfügbar oder nicht freigegeben.')
             return self.respond(200, data, mimetypes.guess_type(name)[0] or 'application/octet-stream')
         return self.respond(404, 'Seite nicht verfügbar.')
 
     def do_POST(self):
+        if self.path == '/api/exclusions' and SMB:
+            if self.headers.get('X-Knowledge-Hub') != '1' or self.headers.get('Sec-Fetch-Site', 'same-origin') not in ('same-origin', 'none'):
+                return self.obj(403, {'error': 'Anfrage nicht zugelassen.'})
+            try:
+                length = int(self.headers.get('Content-Length', '0'))
+                if not 0 < length < 8192: raise ValueError()
+                payload = json.loads(self.rfile.read(length))
+                name, action = payload['path'], payload['action']
+                if not valid_path(name) or name.casefold() == 'index.md' or action not in ('exclude', 'restore'):
+                    raise ValueError()
+                global source_ok
+                with lock:
+                    items = set(excluded)
+                    if action == 'exclude':
+                        if name not in allowed: raise ValueError()
+                        items.add(name)
+                    else:
+                        if name not in items: raise ValueError()
+                        items.remove(name)
+                    persist_exclusions(items)
+                    excluded.clear()
+                    excluded.update(items)
+                    source_ok = False
+                    try:
+                        refresh()
+                    except Exception:
+                        return self.obj(503, {'error': 'Liste gespeichert; Ansicht konnte nicht aktualisiert werden.'})
+                return self.obj(200, {'message': 'Ausschlussliste aktualisiert.', 'excluded': sorted(excluded)})
+            except (OSError, ValueError, KeyError, TypeError):
+                return self.obj(400, {'error': 'Ausschlussliste konnte nicht geändert werden.'})
         if self.path != '/api/save': return self.obj(404, {'error': 'Nicht verfügbar.'})
         try:
             length = int(self.headers.get('Content-Length', '0'))
@@ -219,7 +287,7 @@ header{background:#fff;border-bottom:1px solid var(--line);padding:14px 20px 12p
 #msg{white-space:pre-wrap;margin:10px 0 0;padding:8px 10px;background:#edf6f0;border-radius:8px;font-size:12px}#msg:empty{display:none}#editpanel{background:#fff;padding:12px 20px 14px;border-bottom:1px solid var(--line)}#editpanel[hidden]{display:none}.editor-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;font-size:12px;font-weight:700}.editor-top span{font-size:11px;color:var(--muted);font-weight:400}textarea{display:block;width:100%;height:25vh;min-height:115px;padding:12px;border:1px solid #cfddd6;border-radius:10px;background:#f9fbfa;color:#253d35;resize:vertical;font:13px/1.55 ui-monospace,Consolas,monospace}.editor-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}.editor-actions button{font-size:12px}.workspace{flex:1;min-height:0;padding:10px 12px 12px}.workspace iframe{display:block;width:100%;height:100%;min-height:160px;background:white;border:1px solid var(--line);border-radius:12px;box-shadow:0 3px 16px #173c2a0b}@media(max-width:520px){header{padding:10px 12px}.badge{display:none}.toolbar{margin-top:9px}.workspace{padding:7px}.brand p{display:none}#editpanel{padding:10px 12px}}
 :root[data-theme="dark"] body{background:#101b17}:root[data-theme="dark"] header,:root[data-theme="dark"] #editpanel{background:#192821}:root[data-theme="dark"] select,:root[data-theme="dark"] textarea{background:#21342b;color:var(--ink);border-color:#40574d}:root[data-theme="dark"] button:not(.primary){background:#263a32;border-color:#40574d;color:var(--ink)}:root[data-theme="dark"] .primary{background:#50b58d;border-color:#50b58d;color:#10271b}:root[data-theme="dark"] .brand-icon{background:#284a3b;color:#8cdbb2}:root[data-theme="dark"] #msg{background:#294437}:root[data-theme="dark"] .workspace iframe{background:#202c26}.top-actions{display:flex;align-items:center;gap:8px}#theme{min-height:32px;font-size:12px;padding:0 10px}.editor-top strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
-<div hidden><select id="page"></select><div id="header-actions" class="kh-header-actions"><button id="theme" class="kh-theme" type="button" aria-label="Dunkelmodus einschalten">◐ Dunkel</button></div><section id="dock" class="kh-editor"><button id="open" class="primary">✎ Bearbeiten</button><p id="msg" class="kh-status" role="status"></p><section id="editpanel" hidden><strong id="edit-title" class="kh-editor-title">Markdown bearbeiten</strong><textarea id="editor" aria-label="Markdown bearbeiten" spellcheck="false"></textarea><div class="kh-editor-actions"><button id="save" class="primary">Speichern</button><button id="restore">Letzte Sicherung laden</button><button id="close">Editor schließen</button></div></section><p class="kh-updated">Letzte Aktualisierung: <span id="time">–</span></p></section></div><main class="workspace"><iframe title="Leseansicht" src="site/index.html" sandbox="allow-scripts allow-same-origin"></iframe></main>
+<div hidden><select id="page"></select><div id="header-actions" class="kh-header-actions"><button id="theme" class="kh-theme" type="button" aria-label="Dunkelmodus einschalten">◐ Dunkel</button></div><section id="dock" class="kh-editor"><button id="open" class="primary">✎ Bearbeiten</button><p id="msg" class="kh-status" role="status"></p><section id="editpanel" hidden><strong id="edit-title" class="kh-editor-title">Markdown bearbeiten</strong><textarea id="editor" aria-label="Markdown bearbeiten" spellcheck="false"></textarea><div class="kh-editor-actions"><button id="save" class="primary">Speichern</button><button id="restore">Letzte Sicherung laden</button><button id="close">Editor schließen</button></div></section><details id="exclusions" hidden><summary>Ausgeschlossene Dateien verwalten</summary><p>Neue Markdown-Dateien und unterstützte Bilder sind sichtbar, bis sie hier ausgeschlossen werden. Die Startseite kann nicht ausgeschlossen werden.</p><label for="exclude-page">Datei auswählen</label><select id="exclude-page"></select><button id="exclude-add" type="button">Datei ausschließen</button><ul id="exclude-list"></ul><p id="exclude-msg" role="status"></p></details><p class="kh-updated">Letzte Aktualisierung: <span id="time">–</span></p></section></div><main class="workspace"><iframe title="Leseansicht" src="site/index.html" sandbox="allow-scripts allow-same-origin"></iframe></main>
 <style>html,body{height:100%;margin:0}.workspace{height:100%;padding:0}.workspace iframe{height:100%;min-height:0;border:0;border-radius:0}</style>
 <script>
 let revision='',opened='',current='',baseline='',saving=false,loadSeq=0,editorDocument=null; const page=document.querySelector('#page'),frame=document.querySelector('iframe'); let editor=document.querySelector('#editor'),msg=document.querySelector('#msg'),themeButton=document.querySelector('#theme'),dock=document.querySelector('#dock'),headerActions=document.querySelector('#header-actions'),panel=document.querySelector('#editpanel'),openButton=document.querySelector('#open'),editTitle=document.querySelector('#edit-title'),timeLabel=document.querySelector('#time'),saveButton=document.querySelector('#save'),restoreButton=document.querySelector('#restore'),closeButton=document.querySelector('#close');
@@ -232,7 +300,11 @@ frame.onload=syncPage;fetch('api/pages').then(r=>r.json()).then(x=>{timeLabel.te
 page.onchange=()=>{current=page.value;frame.src='site/'+page.value.replace(/\\.md$/,'.html')};
 async function loadPage(target){const seq=++loadSeq,oldOpened=opened,oldValue=editor.value;try{const r=await fetch('api/file?path='+encodeURIComponent(target));const x=await r.json();if(seq!==loadSeq||current!==target)return;if(!r.ok){msg.textContent=x.error;return}if(opened!==oldOpened||editor.value!==oldValue){msg.textContent='Ihr Entwurf bleibt erhalten. Bitte erneut auf Bearbeiten klicken.';return}editor.value=x.content;baseline=x.content;revision=x.revision;opened=target;editTitle.textContent='Bearbeiten: '+opened;panel.hidden=false;msg.textContent='Geöffnet: '+opened}catch(e){msg.textContent='Seite konnte nicht geöffnet werden.'}}
 function followPage(){if(!current||saving||editor.value!==baseline){msg.textContent='Ansicht gewechselt. Ihr Entwurf für '+opened+' bleibt geöffnet. Kehren Sie zum Speichern zurück.';return}loadPage(current)}
-function bindControls(){themeButton.onclick=()=>{theme=theme==='dark'?'light':'dark';try{localStorage.setItem('kh-theme',theme)}catch(e){}applyTheme()};
+function bindExclusions(){const box=dock.querySelector('#exclusions');if(!box)return;const select=box.querySelector('#exclude-page'),list=box.querySelector('#exclude-list'),status=box.querySelector('#exclude-msg'),add=box.querySelector('#exclude-add');
+async function render(){try{const r=await fetch('api/exclusions');if(!r.ok)return;const x=await r.json();box.hidden=false;select.replaceChildren();x.available.filter(name=>name.toLowerCase()!=='index.md').forEach(name=>{const option=box.ownerDocument.createElement('option');option.value=name;option.textContent=name;select.append(option)});if(current&&current.toLowerCase()!=='index.md')select.value=current;add.disabled=!select.value;list.replaceChildren();x.excluded.forEach(name=>{const li=box.ownerDocument.createElement('li'),button=box.ownerDocument.createElement('button');li.append(box.ownerDocument.createTextNode(name+' '));button.type='button';button.textContent='Wieder anzeigen';button.onclick=()=>change(name,'restore');li.append(button);list.append(li)})}catch(e){status.textContent='Ausschlussliste konnte nicht geladen werden.'}}
+async function change(path,action){if(saving||(!panel.hidden&&editor.value!==baseline)){status.textContent='Bitte Änderungen zuerst speichern oder verwerfen.';return}try{const r=await fetch('api/exclusions',{method:'POST',headers:{'Content-Type':'application/json','X-Knowledge-Hub':'1'},body:JSON.stringify({path,action})}),x=await r.json();status.textContent=x.message||x.error;if(!r.ok)return;const pages=await(await fetch('api/pages')).json();page.replaceChildren();pages.pages.forEach(name=>{const o=document.createElement('option');o.value=name;o.textContent=name;page.append(o)});opened='';baseline='';revision='';panel.hidden=true;frame.src='site/'+(pages.pages.includes(current)?current:'index.md').replace(/\\.md$/,'.html')}catch(e){status.textContent='Ausschlussliste konnte nicht geändert werden.'}}
+add.onclick=()=>{if(select.value)change(select.value,'exclude')};box.ontoggle=()=>{if(box.open)render()};render()}
+function bindControls(){bindExclusions();themeButton.onclick=()=>{theme=theme==='dark'?'light':'dark';try{localStorage.setItem('kh-theme',theme)}catch(e){}applyTheme()};
 openButton.onclick=()=>{if(!current||saving)return;const dirty=!panel.hidden&&editor.value!==baseline;if(dirty&&!confirm('Den aktuellen Entwurf durch die gewählte Seite ersetzen?'))return;loadPage(current)};
 closeButton.onclick=()=>{if(editor.value===baseline||confirm('Editor schließen? Ungespeicherte Änderungen bleiben nur bis zum Neuladen im Editor.'))panel.hidden=true};
 saveButton.onclick=async()=>{if(saving)return;if(!opened||page.value!==opened){msg.textContent='Kehren Sie zum Speichern zur bearbeiteten Seite zurück.';return}const target=opened,content=editor.value,oldRevision=revision;saving=true;saveButton.disabled=true;try{const r=await fetch('api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:target,revision:oldRevision,content})}); const x=await r.json();msg.textContent=x.message||x.error;if(r.ok&&opened===target){revision=x.revision;baseline=content;if(current===target)frame.src='site/'+target.replace(/\\.md$/,'.html');}}catch(e){msg.textContent='Verbindung unterbrochen. Ihr Entwurf bleibt im Editor.'}finally{saving=false;saveButton.disabled=false;if(current!==opened&&!panel.hidden)followPage()}};

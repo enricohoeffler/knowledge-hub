@@ -20,6 +20,10 @@
 .kh-status { white-space: pre-wrap; font-size: .65rem; }
 .kh-status:empty { display: none; }
 .kh-updated { margin-top: .6rem; color: var(--md-default-fg-color--light); font-size: .6rem; }
+.kh-editor details { margin-top: 1rem; font-size: .7rem; }
+.kh-editor summary { cursor: pointer; font-weight: 600; }
+.kh-editor details select { display: block; width: 100%; margin: .4rem 0; padding: .45rem; border: 1px solid var(--kh-border); border-radius: 6px; background: var(--kh-card); color: var(--kh-text); }
+.kh-editor details li { margin: .4rem 0; overflow-wrap: anywhere; }
 
 /* Home Assistant inspired surfaces and blue accent, while retaining Material navigation. */
 body[data-md-color-scheme="default"] {

@@ -33,6 +33,41 @@ class SMBStorage:
         self.kwargs = {'username': options['smb_username'], 'password': options['smb_password'],
                        'connection_timeout': 10, 'auth_protocol': 'ntlm', 'require_signing': True}
 
+    def list_files(self):
+        """List regular files without following SMB reparse points."""
+        files = []
+        def walk(path, relative):
+            with self.client.scandir(path, **self.kwargs) as entries:
+                for entry in entries:
+                    name = entry.name
+                    try:
+                        safe_parts(name)
+                    except ValueError:
+                        continue
+                    rel = relative + '/' + name if relative else name
+                    info = entry.stat(follow_symlinks=False)
+                    if info.st_file_attributes & 0x400 or stat.S_ISLNK(info.st_mode):
+                        continue
+                    if stat.S_ISDIR(info.st_mode):
+                        walk(ntpath.join(path, name), rel)
+                    elif stat.S_ISREG(info.st_mode):
+                        files.append(rel)
+                        if len(files) > 5000:
+                            raise OSError('Too many files')
+        try:
+            current = self.base
+            for part in self.prefix:
+                current = ntpath.join(current, part)
+                info = self.client.lstat(current, **self.kwargs)
+                if info.st_file_attributes & 0x400 or not stat.S_ISDIR(info.st_mode):
+                    raise OSError('Unsafe SMB directory')
+            walk(current, '')
+            return files
+        except OSError:
+            raise
+        except Exception as exc:
+            raise OSError('SMB listing failed') from exc
+
     def _target(self, name):
         parts = self.prefix + safe_parts(name)
         current = self.base
