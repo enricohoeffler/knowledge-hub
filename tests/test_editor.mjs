@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 
 const source = readFileSync('knowledge_hub/app.py', 'utf8');
 const script = source.split('<script>')[1].split('</script>')[0].replaceAll('\\\\', '\\');
-const elements = Object.fromEntries(['page','editor','msg','theme','dock','header-actions','editpanel','open','edit-title','time','save','restore','close'].map(id => [id, {
+const elements = Object.fromEntries(['page','editor','msg','theme','dock','header-actions','editpanel','open','edit-title','time','save','restore','close','exclude-file','exclude-folder'].map(id => [id, {
   id, value:'', textContent:'', hidden:id==='editpanel', disabled:false, dataset:{}, options:[],
   setAttribute(){}, replaceWith(next){ elements.editor=next; }, append(child){this.options.push(child);}
 }]));
@@ -17,6 +17,7 @@ const requests = [];
 const mockFetch = async (url, opts) => {
   requests.push({url,opts});
   if (url==='api/pages') return response(true,{pages:Object.keys(files),built_at:'test'});
+  if (url==='api/exclusions') return opts ? response(false,{error:'test'}) : response(true,{available:Object.keys(files),directories:['rezepte']});
   if (url.startsWith('api/file?')) {
     const path=decodeURIComponent(url.split('=')[1]);
     if (delayedFile?.path===path) { await delayedFile.promise; }
@@ -35,7 +36,7 @@ const doc = {
   location:{href:'http://test/site/index.html'},
   addEventListener(type,handler){if(type==='click')this.onClick=handler},
   importNode(node){
-    const ids=node.id==='dock'?['dock','editor','msg','editpanel','open','edit-title','time','save','restore','close']:['header-actions','theme'];
+    const ids=node.id==='dock'?['dock','editor','msg','editpanel','open','edit-title','time','save','restore','close','exclude-file','exclude-folder']:['header-actions','theme'];
     const copies=Object.fromEntries(ids.map(id=>[id,{...elements[id],onclick:undefined}]));
     for(const id of ids)elements[id]=copies[id];
     copies[node.id].querySelector=s=>copies[s.slice(1)];
@@ -47,8 +48,19 @@ const doc = {
 const frame = {contentDocument:doc,contentWindow:{location:{href:'http://test/site/index.html'}},src:''};
 const document={documentElement:{dataset:{}},querySelector(s){return s==='iframe'?frame:elements[s.slice(1)]},createElement(){return {value:'',textContent:''}}};
 let acceptNavigation=false,confirmations=0;
-const context={document,location:{href:'http://test/'},URL,Array,decodeURIComponent,localStorage:{getItem(){return null},setItem(){}},fetch:mockFetch,confirm:()=>{confirmations++;return acceptNavigation}};
+const haTheme={selectedTheme:{dark:true},themes:{darkMode:false}};
+const window={parent:{document:{querySelector:()=>({hass:haTheme})}},matchMedia:()=>({matches:false})};
+const context={document,window,location:{href:'http://test/'},URL,Array,decodeURIComponent,localStorage:{getItem(){return null},setItem(){}},fetch:mockFetch,confirm:()=>{confirmations++;return acceptNavigation}};
 runInNewContext(script,context);
+assert.equal(document.documentElement.dataset.theme,'dark','explicit Home Assistant dark mode is used');
+haTheme.selectedTheme.dark=false;context.applyTheme();
+assert.equal(document.documentElement.dataset.theme,'light','Home Assistant light mode is used');
+haTheme.selectedTheme.dark=undefined;haTheme.themes.darkMode=true;context.applyTheme();
+assert.equal(document.documentElement.dataset.theme,'dark','automatic Home Assistant mode is used');
+window.parent.getComputedStyle=()=>({getPropertyValue:()=> '#ffffff'});context.applyTheme();
+assert.equal(document.documentElement.dataset.theme,'light','Home Assistant background wins over system and legacy state');
+window.parent.getComputedStyle=()=>({getPropertyValue:()=> 'rgb(17, 17, 17)'});context.applyTheme();
+assert.equal(document.documentElement.dataset.theme,'dark','Home Assistant dark background is recognized');
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 const nav=async(path)=>{const next={...frame.contentDocument,__khGuard:false};frame.contentDocument=next;frame.contentWindow.location.href='http://test/site/'+path.replace(/\.md$/,'.html');next.location={href:frame.contentWindow.location.href};frame.onload();await tick()};
 const linkClick=(href)=>{let prevented=false; const link={href,target:'',hasAttribute:()=>false}; frame.contentDocument.onClick({button:0,target:{closest:()=>link},preventDefault(){prevented=true},stopImmediatePropagation(){}});return prevented};
@@ -108,4 +120,14 @@ finishSave(); await pendingSave; await tick();
 assert.equal(files['rezepte/soljanka.md'],'# Während Laden geändert\n');
 assert.equal(elements.editor.value,'# Während Speichern weitergeschrieben\n','typing during a delayed save is retained');
 assert.match(elements['edit-title'].textContent,/soljanka/,'draft stays attached to original file');
+elements.editpanel.hidden=true;
+await nav('rezepte/soljanka.md');
+assert.equal(elements['exclude-file'].hidden,false,'file hide action is available for the current page');
+assert.equal(elements['exclude-folder'].hidden,false,'folder hide action is available for a nested page');
+await click('exclude-folder');
+const exclusion=requests.filter(r=>r.url==='api/exclusions'&&r.opts).at(-1);
+assert.equal(JSON.parse(exclusion.opts.body).path,'rezepte','folder action targets only the current parent folder');
+await nav('index.md');
+assert.equal(elements['exclude-file'].hidden,true,'home page cannot be excluded');
+assert.equal(elements['exclude-folder'].hidden,true,'home page has no parent-folder action');
 console.log('PASS: save and navigate, unsaved drafts, wrong-page guard, delayed load and save');
