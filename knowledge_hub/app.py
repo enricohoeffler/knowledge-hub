@@ -154,13 +154,21 @@ def refresh():
         return True
 
 def poll():
+    previous_error = None
     while True:
         time.sleep(5)
         try:
             refresh()
-        except Exception:
+            previous_error = None
+        except Exception as exc:
             # Never log filenames or content. The last complete generation remains available.
-            pass
+            root = exc
+            while root.__cause__:
+                root = root.__cause__
+            diagnostic = type(exc).__name__ + '/' + type(root).__name__
+            if diagnostic != previous_error:
+                print('Testquelle/Aktualisierung fehlgeschlagen: ' + diagnostic, flush=True)
+                previous_error = diagnostic
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *_):
