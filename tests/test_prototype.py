@@ -5,6 +5,8 @@ from pathlib import Path
 import tempfile
 import threading
 import unittest
+from unittest.mock import patch
+from io import BytesIO
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -169,6 +171,20 @@ class Prototype(unittest.TestCase):
         self.assertIn('wiki/README.html', generated)
         self.assertIn(b'README.html', generated['index.html'])
         self.assertIn(b'README.html', generated['search/search_index.json'])
+
+    def test_11_supervisor_sync_preserves_other_options(self):
+        calls = []
+        def fake_open(request, timeout):
+            calls.append(request)
+            if request.get_method() == 'GET':
+                return BytesIO(json.dumps({'data': {'options': {'smb_password': '!secret test', 'smb_share': 'fixture'}}}).encode())
+            return BytesIO(b'{"result":"ok"}')
+        with patch.dict(os.environ, {'SUPERVISOR_TOKEN': 'synthetic-test-token'}, clear=False), patch.object(hub, 'urlopen', fake_open):
+            hub.sync_supervisor({'folder', 'file.md'})
+        payload = json.loads(calls[1].data)
+        self.assertEqual(payload['options']['smb_password'], '!secret test')
+        self.assertEqual(payload['options']['smb_share'], 'fixture')
+        self.assertEqual(payload['options']['excluded_paths'], ['file.md', 'folder'])
 
 if __name__ == '__main__':
     try: unittest.main(verbosity=2)

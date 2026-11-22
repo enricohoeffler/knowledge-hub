@@ -15,7 +15,7 @@ options = {'smb_server': os.environ['TEST_SMB_SERVER'], 'smb_share': 'khfixture'
            'smb_username': 'khfixture', 'smb_password': 'fixturepass', 'smb_subdirectory': ''}
 (base / 'options.json').write_text(json.dumps(options))
 (base / 'policy.json').write_text(json.dumps({'files': ['index.md', 'zweite.md']}))
-os.environ.update(KH_SYNTHETIC_ONLY='yes', KH_SMB_OPTIONS=str(base / 'options.json'), KH_POLICY=str(base / 'policy.json'), KH_EXCLUSIONS_FILE=str(base / 'excluded.json'))
+os.environ.update(KH_SYNTHETIC_ONLY='yes', KH_SMB_OPTIONS=str(base / 'options.json'), KH_POLICY=str(base / 'policy.json'), KH_EXCLUSIONS_FILE=str(base / 'excluded.json'), KH_TEST_NO_SUPERVISOR='yes')
 spec = importlib.util.spec_from_file_location('hub_smb', '/app/app.py')
 hub = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(hub)
@@ -52,8 +52,22 @@ class SMBEditorAPI(unittest.TestCase):
         self.assertEqual(request('/site/hidden.html')[0], 404)
         self.assertNotIn(b'Synthetic blocked', request('/site/search/search_index.json')[1])
         self.assertEqual(request('/api/exclusions', {'path': 'index.md', 'action': 'exclude'})[0], 400)
-        self.assertEqual(request('/api/exclusions', {'path': 'hidden.md', 'action': 'restore'})[0], 200)
-        self.assertEqual(request('/api/file?path=hidden.md')[0], 200)
+        self.assertEqual(request('/api/exclusions', {'path': 'hidden.md', 'action': 'restore'})[0], 400)
+        self.assertEqual(request('/api/file?path=hidden.md')[0], 404)
+        self.assertIn('wiki', json.loads(request('/api/exclusions')[1])['directories'])
+        self.assertEqual(request('/api/exclusions', {'path': 'wiki', 'action': 'exclude'})[0], 200)
+        self.assertEqual(request('/api/file?path=wiki%2Fnested%2Fbeispiel.md')[0], 404)
+        self.assertEqual(request('/site/wiki/nested/beispiel.html')[0], 404)
+        self.assertNotIn(b'Synthetic nested', request('/site/search/search_index.json')[1])
+        self.assertEqual(request('/api/exclusions', {'path': 'wiki', 'action': 'restore'})[0], 400)
+        # HA options are authoritative on restart, even if the previous cache exists.
+        options['excluded_paths'] = ['hidden.md']
+        (base / 'options.json').write_text(json.dumps(options))
+        new_hub = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(new_hub)
+        self.assertEqual(new_hub.excluded, {'hidden.md'})
+        new_hub.refresh()
+        self.assertIn('wiki/nested/beispiel.md', new_hub.allowed)
 
 
 if __name__ == '__main__':

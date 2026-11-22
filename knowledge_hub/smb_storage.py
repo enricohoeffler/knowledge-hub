@@ -35,7 +35,7 @@ class SMBStorage:
 
     def list_files(self):
         """List regular files without following SMB reparse points."""
-        files = []
+        files, directories = [], []
         def walk(path, relative):
             with self.client.scandir(path, **self.kwargs) as entries:
                 for entry in entries:
@@ -49,6 +49,9 @@ class SMBStorage:
                     if info.st_file_attributes & 0x400 or stat.S_ISLNK(info.st_mode):
                         continue
                     if stat.S_ISDIR(info.st_mode):
+                        directories.append(rel)
+                        if len(directories) > 5000:
+                            raise OSError('Too many directories')
                         walk(ntpath.join(path, name), rel)
                     elif stat.S_ISREG(info.st_mode):
                         files.append(rel)
@@ -62,7 +65,7 @@ class SMBStorage:
                 if info.st_file_attributes & 0x400 or not stat.S_ISDIR(info.st_mode):
                     raise OSError('Unsafe SMB directory')
             walk(current, '')
-            return files
+            return files, directories
         except OSError:
             raise
         except Exception as exc:
